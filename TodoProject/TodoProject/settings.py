@@ -20,7 +20,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'a-s*(-s1yxh$_vf^7@)=!(m1kf(g1na)m!hc%cykjvlyyp)((='
+
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'fallback-secret')
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -77,10 +79,11 @@ WSGI_APPLICATION = 'TodoProject.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'TodoDB',
-        'USER':'postgres',
-        'PASSWORD':'itu@1234',
-        'HOST':'localhost'
+        'NAME': os.environ.get('POSTGRES_DB', 'todo_db'),
+        'USER': os.environ.get('POSTGRES_USER', 'todo_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'todo_password'),
+        'HOST': 'db',  # service name in docker-compose
+        'PORT': 5432,
     }
 }
 
