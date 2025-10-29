@@ -1,0 +1,119 @@
+name: DevOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # Stage 1: Build & Install
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: todo_db
+          POSTGRES_USER: todo_user
+          POSTGRES_PASSWORD: todo_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U todo_user -d todo_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DATABASE_URL: postgres://todo_user:todo_password@localhost:5432/todo_db
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+  # Stage 2: Lint/Security
+  lint:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install flake8 & bandit
+        run: |
+          pip install flake8 bandit
+      - name: Run linting
+        run: flake8 . --exit-zero
+      - name: Security scan
+        run: bandit -r .
+
+  # Stage 3: Run Tests
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: todo_db
+          POSTGRES_USER: todo_user
+          POSTGRES_PASSWORD: todo_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U todo_user -d todo_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgres://todo_user:todo_password@localhost:5432/todo_db
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Run migrations & tests
+        run: |
+          python manage.py migrate
+          python manage.py test
+
+  # Stage 4: Build Docker Image
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/django-todo:latest
+
+  # Stage 5: Deploy (Conditional)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to Render
+        run: |
+          curl -X POST "$RENDER_DEPLOY_HOOK"
