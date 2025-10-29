@@ -24,4 +24,4 @@ RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
 EXPOSE 8000
-CMD ["gunicorn", "ToDoProject.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "__pycache__.wsgi:application", "--bind", "0.0.0.0:8000"]
